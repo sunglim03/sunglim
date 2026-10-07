@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>밸런스 게임</title>
+<style>
+  :root {
+    --bg: #f4f5fb;
+    --card: #ffffff;
+    --text: #1d2033;
+    --muted: #7a7f99;
+    --a: #ff5b6e;
+    --b: #3d7bff;
+    --line: #e3e5f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161f;
+      --card: #1f2230;
+      --text: #f1f2f8;
+      --muted: #9a9fb8;
+      --line: #2e3245;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  main {
+    width: 100%;
+    max-width: 480px;
+    padding: 32px 16px 48px;
+    display: flex;
+    flex-direction: column;
+  }
+  h1 { margin: 0 0 8px; font-size: 28px; text-align: center; }
+  .sub { margin: 0 0 24px; color: var(--muted); text-align: center; font-size: 15px; }
+  .hidden { display: none !important; }
+
+  .progress { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--a), var(--b)); transition: width .25s; }
+  .count { margin: 10px 0 20px; color: var(--muted); font-size: 14px; text-align: center; }
+
+  .choice {
+    width: 100%;
+    min-height: 150px;
+    padding: 20px;
+    border: none;
+    border-radius: 20px;
+    color: #fff;
+    font: inherit;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: keep-all;
+    cursor: pointer;
+    transition: transform .12s;
+  }
+  .choice:active { transform: scale(.97); }
+  .choice.a { background: var(--a); }
+  .choice.b { background: var(--b); }
+  .vs { margin: 14px 0; text-align: center; font-weight: 800; font-size: 18px; color: var(--muted); }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 14px;
+    background: var(--text);
+    color: var(--bg);
+    font: inherit;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .results { list-style: none; margin: 0 0 24px; padding: 0; }
+  .results li {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .results .q { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .results .pick { font-size: 17px; font-weight: 700; }
+  .results .pick.a { color: var(--a); }
+  .results .pick.b { color: var(--b); }
+</style>
+</head>
+<body>
+<main>
+  <h1>밸런스 게임</h1>
+
+  <section id="start">
+    <p class="sub">둘 중 하나만 골라야 한다면?</p>
+    <button class="btn" id="startBtn">시작하기</button>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="progress"><div id="bar"></div></div>
+    <p class="count" id="count"></p>
+    <button class="choice a" id="optA"></button>
+    <div class="vs">VS</div>
+    <button class="choice b" id="optB"></button>
+  </section>
+
+  <section id="result" class="hidden">
+    <p class="sub">내가 고른 선택</p>
+    <ul class="results" id="list"></ul>
+    <button class="btn" id="restartBtn">다시 하기</button>
+  </section>
+</main>
+
+<script>
+  // 질문 목록: 여기만 고치면 됩니다. ["A 선택지", "B 선택지"]
+  const QUESTIONS = [
+    ["평생 여름만 살기", "평생 겨울만 살기"],
+    ["짜장면", "짬뽕"],
+    ["부먹", "찍먹"],
+    ["평생 라면 금지", "평생 치킨 금지"],
+    ["월 200 받고 백수", "월 600 받고 직장인"],
+    ["과거로 가기", "미래로 가기"],
+    ["투명인간 되기", "순간이동 하기"],
+    ["산으로 여행", "바다로 여행"],
+    ["아침형 인간", "저녁형 인간"],
+    ["카톡 답장 10시간 뒤에 하는 애인", "10분마다 연락하는 애인"],
+    ["평생 양치 안 하기", "평생 샤워 안 하기"],
+    ["10억 받고 10년 늙기", "그냥 살기"]
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  let index = 0;
+  let picks = [];
+
+  function show(id) {
+    for (const s of ["start", "game", "result"]) {
+      $(s).classList.toggle("hidden", s !== id);
+    }
+  }
+
+  function renderQuestion() {
+    const [a, b] = QUESTIONS[index];
+    $("optA").textContent = a;
+    $("optB").textContent = b;
+    $("count").textContent = (index + 1) + " / " + QUESTIONS.length;
+    $("bar").style.width = (index / QUESTIONS.length * 100) + "%";
+  }
+
+  function renderResult() {
+    const list = $("list");
+    list.textContent = "";
+    QUESTIONS.forEach(([a, b], i) => {
+      const li = document.createElement("li");
+      const q = document.createElement("div");
+      q.className = "q";
+      q.textContent = a + " vs " + b;
+      const pick = document.createElement("div");
+      pick.className = "pick " + (picks[i] === 0 ? "a" : "b");
+      pick.textContent = picks[i] === 0 ? a : b;
+      li.append(q, pick);
+      list.append(li);
+    });
+  }
+
+  function choose(side) {
+    picks.push(side);
+    index++;
+    if (index < QUESTIONS.length) {
+      renderQuestion();
+    } else {
+      renderResult();
+      show("result");
+    }
+  }
+
+  function start() {
+    index = 0;
+    picks = [];
+    renderQuestion();
+    show("game");
+  }
+
+  $("startBtn").addEventListener("click", start);
+  $("restartBtn").addEventListener("click", start);
+  $("optA").addEventListener("click", () => choose(0));
+  $("optB").addEventListener("click", () => choose(1));
+</script>
+</body>
+</html>
